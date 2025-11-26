@@ -66,7 +66,7 @@ async function loadSeedForUser(userId) {
   };
 }
 
-async function insertSoapi({ id_kunjungan, s, o, a, p, i, id_user = FIXED_USER_ID, waktu_dokumen }) {
+async function insertSoapi({ id_kunjungan, s, o, a, p, i, id_user = FIXED_USER_ID, waktu_dokumen, waktu_dibuat }) {
   const fields = { s, o, a, p, i };
   for (const [k, v] of Object.entries(fields)) {
     if (typeof v !== 'string' || v.trim() === '') {
@@ -78,16 +78,16 @@ async function insertSoapi({ id_kunjungan, s, o, a, p, i, id_user = FIXED_USER_I
 
   const hasOverride = !!waktu_dokumen;
   const sql = hasOverride
-    ? `INSERT INTO soapi (id_user, id_kunjungan, s, o, a, p, i, aktif, waktu_dokumen)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,false,$8)
+    ? `INSERT INTO soapi (id_user, id_kunjungan, s, o, a, p, i, waktu_dibuat, aktif, waktu_dokumen)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false,$9)
        RETURNING id_soapi, id_user, id_kunjungan, waktu_dibuat, waktu_dokumen, s, o, a, p, i, aktif`
-    : `INSERT INTO soapi (id_user, id_kunjungan, s, o, a, p, i, aktif)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,false)
+    : `INSERT INTO soapi (id_user, id_kunjungan, s, o, a, p, i, waktu_dibuat, aktif)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false)
        RETURNING id_soapi, id_user, id_kunjungan, waktu_dibuat, waktu_dokumen, s, o, a, p, i, aktif`;
 
   const params = hasOverride
-    ? [id_user, id_kunjungan, s.trim(), o.trim(), a.trim(), p.trim(), i.trim(), new Date(waktu_dokumen)]
-    : [id_user, id_kunjungan, s.trim(), o.trim(), a.trim(), p.trim(), i.trim()];
+    ? [id_user, id_kunjungan, s.trim(), o.trim(), a.trim(), p.trim(), i.trim(), new Date(waktu_dibuat), new Date(waktu_dokumen)]
+    : [id_user, id_kunjungan, s.trim(), o.trim(), a.trim(), p.trim(), i.trim(), new Date(waktu_dibuat)];
 
   const q = await pool.query(sql, params);
   const output = await pool.query(
@@ -137,12 +137,14 @@ wss.on('connection', async (ws) => {
       if (msg.type === 'soapi.create') {
         try {
           const created = await insertSoapi(msg);
-          ws.send(JSON.stringify({
-            type: 'soapi.created',
-            temp_id: msg.temp_id || null,
-            payload: created,
-            client_id: msg.client_id || null
-          }));
+          wss.clients.forEach(async (client) => {
+            client.send(JSON.stringify({
+              type: 'soapi.created',
+              temp_id: msg.temp_id || null,
+              payload: created,
+              client_id: msg.client_id || null
+            }));
+          });
           console.log('[WS] soapi created id=', created.id_soapi);
         } catch (e) {
           ws.send(JSON.stringify({
@@ -158,14 +160,17 @@ wss.on('connection', async (ws) => {
           const created = await insertSoapi({
             id_kunjungan: msg.id_kunjungan,
             s: msg.s, o: msg.o, a: msg.a, p: msg.p, i: msg.i,
-            waktu_dokumen: msg.waktu_dokumen_ref 
+            waktu_dokumen: msg.waktu_dokumen_ref,
+            waktu_dibuat: msg.waktu_dibuat 
           });
-          ws.send(JSON.stringify({
-            type: 'soapi.edit',
-            temp_id: msg.temp_id || null,
-            payload: created,
-            client_id: msg.client_id || null
-          }));
+          wss.clients.forEach(async (client) => {
+            client.send(JSON.stringify({
+              type: 'soapi.edit',
+              temp_id: msg.temp_id || null,
+              payload: created,
+              client_id: msg.client_id || null
+            }))
+          });
           console.log('[WS] soapi EDIT->INSERT id=', created.id_soapi);
         } catch (e) {
           ws.send(JSON.stringify({

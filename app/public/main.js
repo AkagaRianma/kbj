@@ -204,6 +204,7 @@ form.addEventListener('submit', async (e) => {
   const basePayload = {
     id_kunjungan: parseInt(fIdKunj.value, 10),
     temp_id : temp_id,
+    waktu_dibuat: localIsoLike(),
     s: fS.value.trim(), o: fO.value.trim(), a: fA.value.trim(), p: fP.value.trim(), i: fI.value.trim()
   };
   for (const k of ['s','o','a','p','i']) {
@@ -215,7 +216,7 @@ form.addEventListener('submit', async (e) => {
     payload = { type: 'soapi.edit', ...basePayload, waktu_dokumen_ref: editRef.waktu_dokumen };
     kind = 'soapi.edit';
   } else {
-    payload = { type: 'soapi.create', ...basePayload };
+    payload = { type: 'soapi.create', ...basePayload, };
     kind = 'soapi.create';
   }
 
@@ -224,7 +225,7 @@ form.addEventListener('submit', async (e) => {
     id_user: 1,
     no_rm: currentPatient.no_rm,
     id_kunjungan: basePayload.id_kunjungan,
-    waktu_dibuat: new Date().toISOString(),
+    waktu_dibuat: localIsoLike(),
     waktu_dokumen: (formMode === 'edit' && editRef.waktu_dokumen) ? editRef.waktu_dokumen : new Date().toISOString(),
     s: basePayload.s, o: basePayload.o, a: basePayload.a, p: basePayload.p, i: basePayload.i,
     aktif: true
@@ -295,3 +296,11 @@ window.addEventListener('load', async () => {
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/service-worker.js').catch(e => console.warn('SW failed', e));
 }
+
+
+function localIsoLike() {
+  const d = new Date();
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().replace('T', ' ').replace('Z', '');
+}
+
