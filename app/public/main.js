@@ -21,19 +21,54 @@ let formMode = 'create';
 let editRef = { waktu_dokumen: null };
 
 function log(...args) { console.log('[KBJ]', ...args); }
+const toastBase = {
+  toast: true,
+  showConfirmButton: false,
+  showCloseButton: true,
+  timer: 5000,
+  timerProgressBar: true
+};
+
+function showToast({ title, text = '', icon = 'info', position = 'top-end' }) {
+  if (!window.Swal) return;
+  Swal.close(); // keep only one alert on screen
+  Swal.fire({ ...toastBase, position, icon, title, text });
+}
+
+function notifyConnection(connected) {
+  showToast({
+    position: 'top-end',
+    icon: connected ? 'success' : 'error',
+    title: connected ? 'Koneksi tersambung' : 'Koneksi terputus',
+    text: connected ? 'Realtime aktif.' : 'Aplikasi offline, menunggu koneksi...'
+  });
+}
+
+function notifySync({ title, text, icon = 'info' }) {
+  showToast({
+    position: 'bottom-start',
+    icon,
+    title,
+    text
+  });
+}
 
 function setConnected() {
+  const wasConnected = isConnected;
   isConnected = true;
   statusEl.textContent = 'Connected';
   statusEl.classList.remove('bg-danger'); statusEl.classList.add('bg-success');
   log('STATUS Connected');
+  if (!wasConnected) notifyConnection(true);
 }
 
 function setOffline() {
+  const wasConnected = isConnected;
   isConnected = false;
   statusEl.textContent = 'Offline';
   statusEl.classList.remove('bg-success'); statusEl.classList.add('bg-danger');
   log('STATUS Offline');
+  if (wasConnected) notifyConnection(false);
 }
 
 function connectWebSocket() {
@@ -75,8 +110,10 @@ function connectWebSocket() {
         await cache.delSoapi(msg.temp_id);
         await pending.done(msg.client_id);
         renderCurrentSoapiList();
+        notifySync({ title: 'Sinkronisasi berhasil', text: 'Data tersimpan di server.', icon: 'success' });
       } else if (msg.type === 'error') {
         log('SERVER ERROR for client_id:', msg.client_id, msg.error);
+        notifySync({ title: 'Sinkronisasi gagal', text: 'Server mengembalikan error.', icon: 'error' });
       }
     } catch (e) {
       log('Parse message failed', e);
@@ -248,13 +285,16 @@ form.addEventListener('submit', async (e) => {
 
   if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
     try {
+      notifySync({ title: 'Mengirim data', text: 'Data dikirim ke server.', icon: 'info' });
       socket.send(JSON.stringify({ ...payload, client_id: opId }));
       log('CLIENT send to server:', { opId, payload });
     } catch (err) {
       log('CLIENT send failed:', err);
+      notifySync({ title: 'Pengiriman gagal', text: 'Koneksi bermasalah, data tertahan.', icon: 'error' });
     }
   } else {
     log('CLIENT offline, kept pending:', opId);
+    notifySync({ title: 'Data belum dikirim', text: 'Tidak dikirim karena offline.', icon: 'warning' });
   }
 });
 
@@ -266,10 +306,12 @@ async function flushPending() {
   for (const op of ops) {
     if (op.kind === 'soapi.create' || op.kind === 'soapi.edit') {
       try {
+        notifySync({ title: 'Mengirim data tertunda', text: 'Sedang menyinkronkan ke server.', icon: 'info' });
         socket.send(JSON.stringify({ ...op.payload, client_id: op.id }));
         log('FLUSH send', op.id);
       } catch (e) {
         log('FLUSH failed', op.id, e);
+        notifySync({ title: 'Sinkronisasi tertunda', text: 'Gagal mengirim antrian, coba lagi.', icon: 'warning' });
         break;
       }
     }
