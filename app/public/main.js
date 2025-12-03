@@ -44,7 +44,6 @@ function connectWebSocket() {
 
   socket.addEventListener('open', () => {
     setConnected();
-    flushPending();
   });
 
   socket.addEventListener('close', () => {
@@ -63,6 +62,7 @@ function connectWebSocket() {
       if (msg.type === 'seed') {
         const { kunjungan, soapi } = msg.payload || { kunjungan: [], soapi: [] };
         log('CLIENT receive seed:', { kunjungan: kunjungan.length, soapi: soapi.length });
+        await flushPending();
         await cache.trashAll();
         await cache.putKunjungan(kunjungan);
         await cache.putSoapi(soapi);
@@ -117,7 +117,8 @@ cardsEl.addEventListener('click', async (e) => {
     await showSoapiForPatient(no_rm);
   } else if (act === 'tambah') {
     const id_kunjungan = parseInt(btn.getAttribute('data-id_kunjungan'), 10);
-    openModalTambah(id_kunjungan);
+    const no_rm = btn.getAttribute('data-no_rm');
+    openModalTambah(id_kunjungan, no_rm);
   }
 });
 
@@ -188,8 +189,9 @@ async function renderCurrentSoapiList() {
   if (currentPatient.no_rm) await showSoapiForPatient(currentPatient.no_rm);
 }
 
-function openModalTambah(id_kunjungan) {
+function openModalTambah(id_kunjungan, no_rm) {
   fIdKunj.value = id_kunjungan;
+  currentPatient.no_rm = String(no_rm);
   fS.value = ''; fO.value = ''; fA.value = ''; fP.value = ''; fI.value = '';
   formMode = 'create';
   editRef.waktu_dokumen = null;
